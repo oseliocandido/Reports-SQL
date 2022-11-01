@@ -1,0 +1,361 @@
+ALTER PROCEDURE [dbo].[stp_Fato_Chamados] AS
+
+DROP TABLE IF EXISTS dbo.Fato_Chamados
+
+-- Atualizar para 0 onde os valores vieram em branco do script Python da API para posterior conversão em INT e Decimal
+UPDATE [DBGSKPI].[dbo].[ServiceNow] 
+SET u_sla_sla_duration = 0
+WHERE u_sla_sla_duration = ''
+
+UPDATE [DBGSKPI].[dbo].[ServiceNow] 
+SET u_sla_duration = 0
+WHERE  u_sla_duration = ''
+
+UPDATE [DBGSKPI].[dbo].[ServiceNow] 
+SET u_sla_business_duration = 0
+WHERE u_sla_business_duration = ''
+
+UPDATE [DBGSKPI].[dbo].[ServiceNow] 
+SET u_sla_pause_duration = 0
+WHERE u_sla_pause_duration = ''
+
+UPDATE [DBGSKPI].[dbo].[ServiceNow] 
+SET u_sla_business_pause_duration = 0
+WHERE u_sla_business_pause_duration = ''
+----------------------------------------------------------------------------
+SELECT
+	CONVERT(INT, u_sla_business_duration) AS 'u_sla_business_duration',
+    CONVERT(INT, u_sla_duration)  AS 'u_sla_duration',
+    CONVERT(DATETIME,u_sla_pause_time) AS 'u_sla_pause_time',
+    CONVERT(INT,u_sla_pause_duration) AS 'u_sla_pause_duration',
+    CONVERT(INT,u_sla_sla_duration) AS 'u_sla_sla_duration',
+    CONVERT(INT,u_sla_business_pause_duration) AS 'u_sla_business_pause_duration',
+
+    CONVERT(DATE,[u_sla_breach_time]) AS 'Data Vencimento (sem hora)',
+    CONVERT(TIME(0),[u_sla_breach_time]) AS 'Hora Vencimento (sem data)',
+    CONVERT(DATE,[resolved_at]) AS  'Data fechamento (sem hora)',
+    CONVERT(DATE,[opened_at]) AS 'Data Abertura (sem hora)',
+   
+       [u_sla_sys_id]
+      ,[sys_updated_on]
+      ,[u_requested_for_manager]
+      ,[u_catalog_item]
+      --,[u_sla_duration]
+      ,[number]
+      --,[u_catalog_item_active]
+      --,[u_sla_pause_time]
+      ,[resolved_by]
+      --,[sys_updated_by]
+      ,[opened_by]
+      ,[sys_created_on]
+      ,[u_sla_business_time_left]
+      ,[u_sla_u_sla_type]
+      ,[u_requested_for_location_state]
+      ,[state]
+      ,[u_catalog_item_u_bbs_finances_modules]
+      --,[case]
+      ,[sys_created_by]
+      --,[u_sla_pause_duration]
+      --,[u_requested_for_location_u_service_desk_group]
+      ,[u_catalog_item_sys_name]
+      ,[closed_at]
+      --,[u_sla_sla_duration]
+      ,[assignment_group_u_division_u_headquarter_location_u_country]
+      ,[u_requested_for]
+      --,[active]
+      ,[u_sla_original_breach_time]
+      ,[u_catalog_item_u_bbs_finance_process]
+      ,[priority]
+      --,[u_sla_business_duration]
+      ,[opened_at]
+     -- ,[u_sla_business_pause_duration]
+      ,[resolved_at]
+      ,[u_sla_start_time]
+      ,[u_catalog_item_meta]
+      --,[u_resolution_target]
+      ,[assignment_group_u_bbs_center]
+      ,CASE WHEN u_ticket_reopened = 0 THEN 'Não' ELSE 'Sim' END 'u_ticket_reopened'
+      --,[u_catalog_item_name]
+      ,[u_requested_for_location_name]
+      ,[short_description]
+      ,[u_sla_time_left]
+      ,[u_sla]
+      ,[assignment_group]
+      ,[u_case_sys_id]
+      ,[u_sla_was_paused]
+      ,[u_catalog_item_u_bbs_id]
+      ,[contact_type]
+      ,[u_requested_for_location_u_country]
+      ,[u_stage]
+     -- ,[urgency]
+      ,[assignment_group_u_division]
+      ,[u_requested_for_location_city]
+      ,[u_requested_for_department]
+      ,[assigned_to]
+      ,[u_sla_breach_time]
+      ,[u_item_sys_id]
+      ,[assignment_group_u_division_u_headquarter_location_city]
+      ,[u_sla_u_sla_original_duration]
+     -- ,[due_date]
+     -- ,[sys_mod_count]
+      ,[u_requested_for_u_p_b_company]
+      ,[u_sla_staus]
+      ,[category]
+INTO #TEMP_AUXILIAR1    
+FROM [DBGSKPI].[dbo].[ServiceNow]
+WHERE state <> 'Cancelada' AND number LIKE 'FIC%'
+--AND (ISNUMERIC(u_sla_business_duration) = 1 AND 
+--ISNUMERIC(u_sla_duration) = 1 AND
+--ISNUMERIC(u_sla_pause_duration) = 1 AND
+--ISNUMERIC(u_sla_sla_duration) = 1 AND
+--ISNUMERIC(u_sla_business_pause_duration) = 1)
+---------------------------------------------------------------------------------
+DECLARE @AGORA DATETIME
+SET @AGORA = CONVERT(DATETIME2(0),GETDATE())
+
+SELECT 
+    [Data Vencimento (sem hora)],
+	[Hora Vencimento (sem data)],
+	[Data fechamento (sem hora)],
+	[Data Abertura (sem hora)],
+
+CASE 
+     WHEN [state] = 'Aguardando informações' THEN 'Em pausa'
+     WHEN [state] = 'Cancelada' THEN 'Cancelada'
+	 WHEN [u_sla_breach_time] = '1900-01-01 00:00:00.000' THEN 'Sem Breach Time'
+	 WHEN [state] = 'Encerrado' AND [resolved_at] = '1900-01-01 00:00:00.000' and [closed_at] = '1900-01-01 00:00:00.000' AND @AGORA>=[u_sla_breach_time] THEN 'No Prazo' 
+	 WHEN [state] = 'Encerrado' AND [resolved_at] = '1900-01-01 00:00:00.000' and [closed_at] = '1900-01-01 00:00:00.000' AND @Agora < [u_sla_breach_time] THEN  'Em Atraso' 
+	 WHEN [state] = 'Encerrado' AND [resolved_at] = '1900-01-01 00:00:00.000' and [closed_at] <= [u_sla_breach_time] then 'No Prazo' 
+	 WHEN [state] = 'Encerrado' AND [resolved_at] = '1900-01-01 00:00:00.000' and [closed_at] > [u_sla_breach_time] then 'Em Atraso'
+	 WHEN [resolved_at] ='1900-01-01 00:00:00.000' and [u_sla_breach_time] >= @AGORA then 'No Prazo' 
+	 WHEN [resolved_at] ='1900-01-01 00:00:00.000' and [u_sla_breach_time] < @AGORA then 'Em Atraso' 
+     WHEN [resolved_at] <= [u_sla_breach_time] THEN  'No Prazo' 
+     WHEN [resolved_at] > [u_sla_breach_time] then 'Em atraso' ELSE 'Verificar' 
+	 END 'GS_Status_SLA',
+CASE  
+     WHEN [state] = 'Encerrado' then 'Fechado' 
+     WHEN [state] = 'Cancelada' then 'Cancelada' 
+	 WHEN [state] = 'Aguardando informações' then 'Em Pausa' 
+	 WHEN [resolved_at] = '1900-01-01 00:00:00.000' then 'Em Aberto' 
+	 WHEN [state] = 'Cancelled' then 'Cancelada' 
+	 WHEN [state] = 'Awating Info' then 'Em Pausa' 
+	 ELSE 'Fechado'
+	 END 'GS_Status_Conclusão',
+
+     MONTH([u_sla_breach_time]) AS Mês,
+     YEAR([u_sla_breach_time]) AS Ano,
+     REPLACE(u_catalog_item_meta,',','|') AS Metadados,
+
+	 u_sla_sla_duration -  u_sla_business_duration AS 'SLA Consumido',
+
+   -- Arredondar pra 2 casas decimais e entender pq aqui ele não tá arredondando!
+  CASE 
+      WHEN u_sla_sla_duration = 0 THEN 0 
+	  ELSE CONVERT(NUMERIC(16,4),ROUND(1 - ((u_sla_sla_duration - u_sla_business_duration) / CONVERT(NUMERIC,u_sla_sla_duration)),2)) END '% Consumo SLA',
+
+  CASE
+      WHEN  u_sla_sla_duration = 0 then 'Sem SLA' 
+	  WHEN CONVERT(NUMERIC(10,2),ROUND(1 - ((u_sla_sla_duration - u_sla_business_duration) / CONVERT(NUMERIC,u_sla_sla_duration)),2)) <= 0.25 then '0 a 25%' 
+	  WHEN CONVERT(NUMERIC(10,2),ROUND(1 - ((u_sla_sla_duration - u_sla_business_duration) / CONVERT(NUMERIC,u_sla_sla_duration)),2)) <= 0.5 then '26% a 50%' 
+	  WHEN CONVERT(NUMERIC(10,2),ROUND(1 - ((u_sla_sla_duration - u_sla_business_duration) / CONVERT(NUMERIC,u_sla_sla_duration)),2)) <= 0.75 then '51% a 75%' 
+	  WHEN CONVERT(NUMERIC(10,2),ROUND(1 - ((u_sla_sla_duration - u_sla_business_duration) / CONVERT(NUMERIC,u_sla_sla_duration)),2)) <= 0.9 then '76% a 90%' 
+      WHEN CONVERT(NUMERIC(10,2),ROUND(1 - ((u_sla_sla_duration - u_sla_business_duration) / CONVERT(NUMERIC,u_sla_sla_duration)),2)) <= 1 then '91 a 100%' 
+	  WHEN CONVERT(NUMERIC(10,2),ROUND(1 - ((u_sla_sla_duration - u_sla_business_duration) / CONVERT(NUMERIC,u_sla_sla_duration)),2)) > 1 then 'Acima do SLA' 
+	  ELSE  'Checar' 
+	  END 'Range Consumo',
+
+  CASE 
+      WHEN [u_sla_sla_duration] = 0 THEN 'Sem SLA'
+	  WHEN [u_sla_business_duration] > [u_sla_sla_duration] THEN 'Acima do SLA' 
+	  WHEN [u_sla_business_duration] < [u_sla_sla_duration] THEN 'Abaixo do SLA' 
+	  WHEN [u_sla_business_duration] = [u_sla_sla_duration] THEN 'Igual ao SLA'
+	  ELSE 'Checar' END 'Direção SLA',
+
+	  u_sla_business_duration + u_sla_pause_duration AS 'Sla Realizado com desc de pausa',
+	  u_sla_sla_duration - (u_sla_business_duration + u_sla_pause_duration) AS 'SLA Consumido com desc pausa',
+---------------------------
+-- AJUSTAR -> Se o [u_sla_sla_duration] = 0 then SERIA 'Sem Sla'
+  CASE 
+      WHEN [u_sla_sla_duration] = 0 THEN 0
+	  ELSE CONVERT(NUMERIC(16,4),ROUND(1-((u_sla_sla_duration - (u_sla_business_duration + u_sla_pause_duration)) / CONVERT(NUMERIC,u_sla_sla_duration)),2)) END '% Consumo SLA com desc pausa',
+--------------------------
+
+ CASE
+      WHEN  u_sla_sla_duration = 0 then 'Sem SLA' 
+	  WHEN CONVERT(NUMERIC(10,2),ROUND(1-((u_sla_sla_duration - (u_sla_business_duration + u_sla_pause_duration)) / CONVERT(NUMERIC,u_sla_sla_duration)),2)) <= 0.25 then '0 a 25%' 
+	  WHEN CONVERT(NUMERIC(10,2),ROUND(1-((u_sla_sla_duration - (u_sla_business_duration + u_sla_pause_duration)) / CONVERT(NUMERIC,u_sla_sla_duration)),2))<= 0.5 then '26% a 50%' 
+	  WHEN CONVERT(NUMERIC(10,2),ROUND(1-((u_sla_sla_duration - (u_sla_business_duration + u_sla_pause_duration)) / CONVERT(NUMERIC,u_sla_sla_duration)),2)) <= 0.75 then '51% a 75%' 
+	  WHEN CONVERT(NUMERIC(10,2),ROUND(1-((u_sla_sla_duration - (u_sla_business_duration + u_sla_pause_duration)) / CONVERT(NUMERIC,u_sla_sla_duration)),2))<= 0.9 then '76% a 90%' 
+      WHEN CONVERT(NUMERIC(10,2),ROUND(1-((u_sla_sla_duration - (u_sla_business_duration + u_sla_pause_duration)) / CONVERT(NUMERIC,u_sla_sla_duration)),2))<= 1 then '91 a 100%' 
+	  WHEN CONVERT(NUMERIC(10,2),ROUND(1-((u_sla_sla_duration - (u_sla_business_duration + u_sla_pause_duration)) / CONVERT(NUMERIC,u_sla_sla_duration)),2)) > 1 then 'Acima do SLA' 
+	  ELSE  'Checar' 
+	  END 'Range Consumo com desc pausa',
+
+CASE
+      WHEN  u_sla_sla_duration = 0 THEN 'Sem SLA'
+	  WHEN  (u_sla_business_duration + u_sla_pause_duration) > [u_sla_sla_duration] THEN 'Acima do SLA' 
+	  WHEN  (u_sla_business_duration + u_sla_pause_duration) < [u_sla_sla_duration] THEN 'Abaixo do SLA' 
+	  WHEN  (u_sla_business_duration + u_sla_pause_duration) = [u_sla_sla_duration] THEN 'Igual ao SLA'
+	  ELSE 'Checar' 
+	  END 'Direção SLA com desc pausa',
+
+CASE  WHEN [u_sla_business_pause_duration] = 0 THEN 'Sem Pausa' 
+      WHEN [u_sla_business_pause_duration] > 0 THEN 'Com Pausa'
+      ELSE 'Sem Pausa'
+	  END 'Analise de Pausa',
+
+	REPLACE(
+	RTRIM(LTRIM(
+CASE
+     WHEN  u_catalog_item_u_bbs_id  <> '' THEN u_catalog_item_u_bbs_id
+
+	 -- Meta 4
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 1) LIKE 'BRA%' THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 1)
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 1) LIKE 'BEA%' THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 1)
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 1) LIKE 'ARG%' THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 1)
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 1) LIKE 'HR%'  THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 1)
+	
+	--Meta 3
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 2) LIKE 'BRA%' THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 2)
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 2) LIKE 'BEA%' THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 2)
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 2) LIKE 'ARG%' THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 2)
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 2) LIKE 'HR%'  THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 2)
+	
+	 --Meta 2
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 3) LIKE 'BRA%' THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 3)
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 3) LIKE 'BEA%' THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 3)
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 3) LIKE 'ARG%' THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 3)
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 3) LIKE 'HR%'  THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 3)
+
+	 --Meta 1
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 4) LIKE 'BRA%' THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 4)
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 4) LIKE 'BEA%' THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 4)
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 4) LIKE 'ARG%' THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 4)
+	 WHEN  PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 4) LIKE 'HR%'  THEN PARSENAME(REPLACE(u_catalog_item_meta, ',', '.'), 4)
+	 ELSE 'Sem Ref ID' END)),'.','') 'Id_Fila_GS' ,
+
+	  CASE
+		    WHEN u_sla_breach_time = '1900-01-01 00:00:00.000' THEN NULL
+			ELSE DATEDIFF(DAY,u_sla_breach_time,CONVERT(DATE,GETDATE())) 
+			END 'Dif_Dias',
+	 
+       [u_sla_sys_id]
+      ,[sys_updated_on]
+      ,[u_requested_for_manager]
+      ,[u_catalog_item]
+      --,[u_sla_duration]
+      ,[number]
+      --,[u_catalog_item_active]
+      --,[u_sla_pause_time]
+      ,[resolved_by]
+      --,[sys_updated_by]
+      ,[opened_by]
+      ,[sys_created_on]
+      ,[u_sla_business_time_left]
+      ,[u_sla_u_sla_type]
+      ,[u_requested_for_location_state]
+      ,[state]
+      ,[u_catalog_item_u_bbs_finances_modules]
+      --,[case]
+      ,[sys_created_by]
+      --,[u_sla_pause_duration]
+      --,[u_requested_for_location_u_service_desk_group]
+      ,[u_catalog_item_sys_name]
+      ,[closed_at]
+      --,[u_sla_sla_duration]
+      ,[assignment_group_u_division_u_headquarter_location_u_country]
+      ,[u_requested_for]
+      --,[active]
+      ,[u_sla_original_breach_time]
+      ,[u_catalog_item_u_bbs_finance_process]
+      ,[priority]
+      --,[u_sla_business_duration]
+      ,[opened_at]
+     -- ,[u_sla_business_pause_duration]
+      ,[resolved_at]
+      ,[u_sla_start_time]
+      --,[u_catalog_item_meta]
+     -- ,[u_resolution_target]
+      ,[assignment_group_u_bbs_center]
+      ,[u_ticket_reopened]
+      --,[u_catalog_item_name]
+      ,[u_requested_for_location_name]
+      ,[short_description]
+      ,[u_sla_time_left]
+      ,[u_sla]
+      ,[assignment_group]
+      ,[u_case_sys_id]
+      ,[u_sla_was_paused]
+      ,[u_catalog_item_u_bbs_id]
+      ,[contact_type]
+      ,[u_requested_for_location_u_country]
+      ,[u_stage]
+      --,[urgency]
+      ,[assignment_group_u_division]
+      ,[u_requested_for_location_city]
+      ,[u_requested_for_department]
+      ,[assigned_to]
+      ,[u_sla_breach_time]
+      ,[u_item_sys_id]
+      ,[assignment_group_u_division_u_headquarter_location_city]
+      ,[u_sla_u_sla_original_duration]
+      --,[due_date]
+      --,[sys_mod_count]
+      ,[u_requested_for_u_p_b_company]
+      ,[u_sla_staus]
+      ,[category]
+
+INTO #TEMP_AUXILIAR2
+FROM #TEMP_AUXILIAR1 
+
+
+SELECT 
+F.*,
+CASE 
+	WHEN F.[GS_Status_SLA]='No Prazo' THEN'On time'
+	WHEN F.[GS_Status_SLA]='Em Atraso' THEN 'Out of time'
+	WHEN F.[GS_Status_SLA]='Em pausa' THEN'Paused'
+	WHEN F.[GS_Status_SLA]='Sem Breach Time' THEN 'Without Breach time'
+	END 'EN Status',
+CASE 
+     WHEN F.[u_case_sys_id] = '' THEN NULL
+	 ELSE 'https://bunge.service-now.com/sn_customerservice_bunge_case.do?sys_id'+ F.[u_case_sys_id]
+	 END 'Link',
+CASE 
+	WHEN F.[GS_Status_Conclusão] ='Fechado' THEN 'Closed'
+	WHEN F.[GS_Status_Conclusão] ='Em Aberto' THEN 'Open'
+	WHEN F.[GS_Status_Conclusão] ='Em Pausa' THEN 'Paused'
+	END 'Status EN 2',
+CASE 
+	WHEN F.[assignment_group]  = '' THEN 'Sem Grupo'
+    WHEN F.[assignment_group] LIKE '%_N0_%' THEN 'N0'
+	WHEN F.[assignment_group] LIKE '%_N1_%' THEN 'N1'
+	WHEN F.[assignment_group] LIKE '%_N2_%' THEN 'N2'
+	WHEN F.[assignment_group] LIKE '%_N3_%' THEN 'N3'
+	WHEN F.[assignment_group] LIKE '%_QA_%' THEN 'QA'
+	WHEN F.[assignment_group] LIKE '%_MT_%' THEN 'Mantenedor'
+	ELSE 'Sem Nível Definido no grupo'
+	END 'Nível',
+CASE 
+	WHEN F.[state] = 'Aguardando informações' THEN 'Em pausa'
+	WHEN F.[state] = 'Cancelada' THEN 'Cancelada'
+	WHEN F.[GS_Status_Conclusão] = 'Fechado' THEN 'Fechado'
+	WHEN F.[u_sla_breach_time] = '1900-01-01 00:00:00.000' THEN 'Sem Breach Time'
+	WHEN F.[Dif_Dias] < 1  AND F.[GS_STATUS_SLA] ='Em Atraso' THEN 'Venceu Hoje'
+	WHEN F.[Dif_Dias] = 1  THEN 'Até 1 dia'
+	WHEN F.[Dif_Dias] > 5 THEN  'Acima de 5 dias'
+	WHEN F.[Dif_Dias] > 1 AND F.[Dif_Dias] <= 5 THEN  'De 2 a 5 dias' 
+	WHEN F.[Dif_Dias] = -1  THEN 'Vence Amanhã'
+	WHEN F.[Dif_Dias] <= -2 THEN 'Proximos Dias'
+	WHEN F.[Dif_Dias] = 0 AND SUBSTRING(CONVERT(varchar,[u_sla_breach_time],108),1,2) >=1 AND substring(CONVERT(varchar,[u_sla_breach_time],108),1,2) <=12 THEN 'MANHA'
+	WHEN F.[Dif_Dias] = 0 AND SUBSTRING(CONVERT(varchar,[u_sla_breach_time],108),1,2) > 12 AND substring(CONVERT(varchar,[u_sla_breach_time],108),1,2) <=19 THEN 'TARDE'
+	WHEN F.[Dif_Dias] = 0 AND SUBSTRING(CONVERT(varchar,[u_sla_breach_time],108),1,2) IN (20,21,22,23,0) THEN 'NOITE'
+	ELSE 'Verificar'
+	END 'Quando_Vence'
+
+             
+INTO Fato_Chamados
+FROM #TEMP_AUXILIAR2 F
+
+DROP TABLE IF EXISTS #TEMP_AUXILIAR1 
+DROP TABLE IF EXISTS #TEMP_AUXILIAR2 

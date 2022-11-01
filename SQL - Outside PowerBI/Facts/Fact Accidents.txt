@@ -1,0 +1,108 @@
+ALTER PROCEDURE [fato].[stpFato_Incidentes_Senior_e_Historico] AS
+/*
+Union tables from different systems.
+First table is from a database located on intranet and the second and third table are from company official ERP. 
+The diffrence between second and third table is that the second table has the employee granularity when the accident type is 1
+*/
+
+SELECT
+	   ROW_NUMBER() OVER(ORDER BY A.[id_incidente] ASC) AS SK_Incidente,
+	   A.[id_incidente],
+       A.[id_projeto],
+       A.[id_tipo_acidente],
+       A.[id_caracterizacao],
+       A.[data_cadastro],
+	   A.[descricao_ocorrencia],
+	  -- B.[id_funcionario],
+	   D.Id_Funcionario,
+	   'Intranet' AS Origem
+INTO BI_DW.fato.Fato_Auxiliar1
+FROM bi_staging.carga.tb_incidentes A
+LEFT JOIN [Incidentes].[dbo].[tb_fun_incidente] B  ON A.id_incidente = B.id_incidente
+LEFT JOIN [Incidentes].[dbo].[tb_funcionario] C ON  B.id_funcionario = C.id_funcionario
+LEFT JOIN (SELECT * FROM BI_DW.DIM.Dimensao_funcionario Z WHERE  Z.Tipo_Col  = 1) D ON C.matricula_funcionario = D.Cd_Funcionario and C.id_empresa = D.Cd_Empresa
+WHERE YEAR(A.[data_cadastro]) >= 2019 AND YEAR(A.[data_cadastro]) <= 2021
+
+
+SELECT
+A.*,
+C.Id_local
+INTO  BI_DW.fato.Fato_Auxiliar2
+FROM  BI_DW.fato.Fato_Auxiliar1 A
+LEFT JOIN [BI_DW].[dim].[Dim_Ponte_Projetos_Locais_Incidentes] C ON A.id_projeto = C.id_projeto
+
+ALTER TABLE  BI_DW.fato.Fato_Auxiliar2 ALTER COLUMN descricao_ocorrencia VARCHAR(MAX)
+--------------------------------------------------------------------------------------------------------------
+DROP TABLE BI_DW.fato.Incidentes_Senior_e_Historico
+
+SELECT TUDO.* 
+INTO BI_DW.fato.Incidentes_Senior_e_Historico
+FROM
+
+(
+SELECT 
+SK_Incidente,
+id_incidente,
+id_projeto,
+id_tipo_acidente,
+id_caracterizacao,
+data_cadastro,
+descricao_ocorrencia,
+id_funcionario,
+Origem,
+Id_local,
+0 AS 'Dias Perdidos',
+0 AS 'Dias Debitados'
+FROM  BI_DW.fato.Fato_Auxiliar2
+
+
+UNION
+
+
+SELECT 	
+		NULL as SK_Incidente,
+		NULL AS id_incidente,
+		NULL AS id_projeto,
+		A.ESPACT as id_tipo_incidente,
+		NULL AS  id_caracterizacao,
+		A.datact AS data_cadastro,
+		A.DESACT as descricao_ocorrencia,
+		D.id_funcionario,
+		'Senior' AS Origem,
+		C.Id_local AS Id_local,
+		g.diaafa AS 'Dias Perdidos',
+		g.DIADEB AS 'Dias Debitados'
+		FROM BI_Staging.carga.R086OCO A
+		LEFT JOIN P_vetorh.dbo.R086ACT B ON 
+		A.NumEmp = B.NumEmp AND A.OcoAct = B.OcoAct AND A.TipOco = B.TipOco
+		LEFT JOIN  BI_DW.DIM.Dimensao_Local C 
+		ON A.NumLoc = C.Cd_Local AND A.TabOrg = C.Id_Organizacao
+		LEFT JOIN BI_DW.dim.Dimensao_Funcionario D ON 
+		D.Cd_Funcionario = B.NumCad AND D.Cd_Empresa = B.NumEmp AND D.Tipo_Col = B.TipCol
+		LEFT JOIN P_vetorh.dbo.R086ACT G ON G.DatAct = A.DatAct AND G.HorAct = A.HorAct  and G.AgeLes = A.AgeLes
+		WHERE A.TipOco = 1
+
+UNION
+
+SELECT 	
+		NULL as SK_Incidente,
+		NULL AS id_incidente,
+		NULL AS id_projeto,
+		E.ESPACT as id_tipo_incidente,
+		NULL AS  id_caracterizacao,
+		E.datact AS data_cadastro,
+		E.DESACT as descricao_ocorrencia,
+		NULL AS id_funcionario,
+		'Senior' AS Origem,
+		F.Id_local AS Id_local,
+		0 AS 'Dias Perdidos',
+		0 AS 'Dias Debitados'
+		FROM BI_Staging.carga.R086OCO E
+		LEFT JOIN  BI_DW.DIM.Dimensao_Local F 
+		ON E.NumLoc = F.Cd_Local AND E.TabOrg = F.Id_Organizacao
+		WHERE E.TipOco = 2
+) TUDO
+
+
+DROP TABLE  BI_DW.fato.Fato_Auxiliar1
+DROP TABLE  BI_DW.fato.Fato_Auxiliar2

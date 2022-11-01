@@ -1,0 +1,66 @@
+ALTER PROCEDURE [fato].[stpFato_Titulos_Contas_Receber]
+
+AS BEGIN
+-- Dataflow between staging and DW, updating cost center trough temporary table #AUXILIAR_RATEIO_RECEBER
+	
+		TRUNCATE TABLE [fato].[Fato_Titulos_Contas_Receber]
+
+		INSERT INTO [fato].[Fato_Titulos_Contas_Receber]
+		(
+			[codemp],
+			[numtit] ,
+			[codtpt] ,
+			[codcli] ,
+			[codfil],
+			[vctpro] ,
+			[vlrabe] , 
+			[codtns] , 
+			[sittit],
+			[vlrori],
+			[ultpag],
+			[vctori],
+			--[codccu],
+			[datemi]
+		)
+		SELECT 
+			[codemp] ,
+			[numtit] ,
+			[codtpt] ,
+			[codcli] ,
+			[codfil],
+			[vctpro] ,
+			[vlrabe] ,
+			[codtns] , 
+			[sittit],
+			[vlrori],
+			[ultpag],
+			[vctori],
+			--[codccu],
+			[datemi]
+		  FROM BI_Staging.[carga].[E301TCR]
+
+
+
+-- Tabela auxiliar usada para puxar os centros de custos da tabela de rateio
+SELECT
+     DISTINCT
+		codemp,
+		codfil,
+		numtit,
+		codtpt,
+		codccu
+INTO #AUXILIAR_RATEIO_RECEBER
+FROM FATO.Fato_Rateio_Titulos_Receber
+
+
+-- Atualização dos centros de custos dos títulos através da pk da tabela (codfil,codemp,numtit,codtpt)
+UPDATE A
+SET A.codccu = B.codccu
+FROM  BI_DW.fato.Fato_Titulos_Contas_Receber  A
+JOIN  #AUXILIAR_RATEIO_RECEBER B ON
+B.codemp = A.codemp AND B.codfil = A.codfil AND B.numtit = A.numtit AND A.codtpt = B.codtpt
+
+
+DROP TABLE #AUXILIAR_RATEIO_RECEBER
+
+END

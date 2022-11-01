@@ -1,0 +1,33 @@
+ALTER PROCEDURE [fato].[stpFato_Foto_Titulos_Receber] AS
+
+-- Once in a month, take a photo of transactions status and insert into the table
+INSERT INTO bi_dw.fato.[Fato_Foto_Titulos_Receber_Gerenciais] 
+SELECT 
+a.codemp AS Empresa,
+numtit AS NF,
+A.codcli AS Cod_Cliente,
+a.codccu AS Centro_Custo,
+datemi AS Emissão,
+vctpro AS Vencimento,
+case when a.ultpag = '1900-12-31 00:00:00.000' then null else a.ultpag end AS Pagamento,
+(CASE WHEN a.sittit = 'AB' THEN 'Aberto' ELSE 'Liquidado' END) AS Situacao_Titulo,
+convert(int,
+case 
+when a.ultpag = '1900-12-31 00:00:00.000' then getdate()- a.vctpro
+else a.ultpag - a.vctpro  end) AS Dias_Atraso,
+vlrabe AS "Valor em Aberto",
+(vlrabe * POWER(1.0002,DATEDIFF(DAY,vctpro,GETDATE())) - vlrabe) AS Custo_Oportunidade,
+DATEFROMPARTS(YEAR(GETDATE()),MONTH(GETDATE()),1) AS 'Mes-Ano_Foto',
+
+case when 
+convert(int,
+case 
+when a.ultpag = '1900-12-31 00:00:00.000' then getdate()- a.vctpro
+else a.ultpag - a.vctpro  end) > 5 then 1 else 0 end atraso_5_dias
+
+FROM BI_DW.FATO.Fato_Titulos_Contas_Receber A
+WHERE
+([sittit] = 'AB' or [sittit] = 'LQ') and
+([codtpt] = '060' or [codtpt] = '066') and
+(A.ultpag = '1900-12-31 00:00:00.000' or A.ultpag >= DATEFROMPARTS(YEAR(GETDATE()),MONTH(GETDATE()),1)) AND
+A.datemi <= GETDATE()
